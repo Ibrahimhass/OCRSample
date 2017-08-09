@@ -10,8 +10,10 @@
 import UIKit
 import Foundation
 import CoreImage
+import GPUImage
+import CoreImage
 
-class ViewController: UIViewController, UITextViewDelegate, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
+class ViewController: UIViewController, UITextViewDelegate, UINavigationControllerDelegate, UIImagePickerControllerDelegate, G8TesseractDelegate {
   
   @IBOutlet weak var textView: UITextView!
   @IBOutlet weak var findTextField: UITextField!
@@ -102,10 +104,6 @@ class ViewController: UIViewController, UITextViewDelegate, UINavigationControll
     }
   }
   
-  @IBAction func sharePoem(_ sender: AnyObject) {
-    
-  }
-  
   
   // Activity Indicator methods
   
@@ -118,13 +116,13 @@ class ViewController: UIViewController, UITextViewDelegate, UINavigationControll
   }
   
   func removeActivityIndicator() {
-    activityIndicator.removeFromSuperview()
-    activityIndicator = nil
+    if (activityIndicator != nil){
+      activityIndicator.removeFromSuperview()
+      activityIndicator = nil
+    }
   }
   
   
-  // The remaining methods handle the keyboard resignation/
-  // move the view so that the first responders aren't hidden
   
   func moveViewUp() {
     if topMarginConstraint.constant != originalTopMargin {
@@ -148,29 +146,11 @@ class ViewController: UIViewController, UITextViewDelegate, UINavigationControll
     })
     
   }
-  
-  @IBAction func backgroundTapped(_ sender: AnyObject) {
-    view.endEditing(true)
-    moveViewDown()
-  }
-}
 
-extension ViewController: UITextFieldDelegate {
-  func textFieldDidBeginEditing(_ textField: UITextField) {
-    moveViewUp()
-  }
-  
-  @IBAction private func textFieldEndEditing(_ sender: AnyObject) {
-    view.endEditing(true)
-    moveViewDown()
-  }
-  
-  func textViewDidBeginEditing(_ textView: UITextView) {
-    moveViewDown()
-  }
+
   //MARK: - Tessaract Usage + Documentation
   func performImageRecognition(image: UIImage) {
-
+    
     let tesseract = G8Tesseract()
     tesseract.language = "eng"
     //  tesseract.setVariableValue("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz{}[]()+-=?", forKey: "tessedit_char_whitelist")
@@ -178,20 +158,60 @@ extension ViewController: UITextFieldDelegate {
     tesseract.pageSegmentationMode = .auto
     tesseract.maximumRecognitionTime = 300.0
     
-    let image = image.toGrayScale()
-    let temp = image.fixOrientation()
+    
+    let image0 = image.toGrayScale()
+    let temp = image0.fixOrientation()
     let image1 = temp.binarise().scaleImage()
-//    img2.image = image1.sliderContrastValueChanged(sender: 0.8)
-    self.applyBlurEffect(image: image1)
-//    img1.image = image1
+
+//    let img0 = AdaptiveThreshold.init()
+//    img0.blurRadiusInPixels = 4.0
+//    let filteredImage3 = filteredImage2.filterWithOperation(img0)
+    
+    
+////    let finalImage = self.detect(inputImage: filteredImage2)
+//    
+//    var imageToBlur = CIImage(image: filteredImage2)
+//    var blurfilter = CIFilter(name: "CIGaussianBlur")
+//    blurfilter?.setValue(imageToBlur, forKey: "inputImage")
+//    blurfilter?.setValue(4, forKey: "inputRadius")
+//    var resultImage = blurfilter?.value(forKey: "outputImage") as! CIImage
+//    var blurredImage = UIImage(ciImage: resultImage)
+    
     img1.image = image1
+//    img2.image = image1
     tesseract.image =  image1//image.g8_blackAndWhite()
     tesseract.recognize()
     textView.text = tesseract.recognizedText
     textView.isEditable = true
     removeActivityIndicator()
+
+    if (tesseract.recognizedText.characters.count == 0){
+      self.performWithAdaptiveFilter(image: image)
+//      removeActivityIndicator()
+//      addActivityIndicator()
+    }
   }
   
+  func performWithAdaptiveFilter(image : UIImage){
+    
+        let tesseract = G8Tesseract()
+        tesseract.language = "eng"
+        tesseract.engineMode = .tesseractCubeCombined
+        tesseract.pageSegmentationMode = .auto
+        tesseract.maximumRecognitionTime = 300.0
+    
+        let img = AdaptiveThreshold.init()
+        img.blurRadiusInPixels = 1.0
+        let filteredImage2 = image.filterWithOperation(img)
+        img2.image = filteredImage2
+    
+        tesseract.image =  filteredImage2//image.g8_blackAndWhite()
+        tesseract.recognize()
+        textView.text = tesseract.recognizedText
+        textView.isEditable = true
+//        removeActivityIndicator()
+
+  }
   func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
      let image = info[UIImagePickerControllerEditedImage] as! UIImage
     let selectedPhoto = info[UIImagePickerControllerOriginalImage] as! UIImage
@@ -200,18 +220,6 @@ extension ViewController: UITextFieldDelegate {
       self.performImageRecognition(image: image)
     })
   }
-
-  func applyBlurEffect(image: UIImage){
-    var imageToBlur = CIImage(image: image)
-    var blurfilter = CIFilter(name: "CIGaussianBlur")
-    blurfilter?.setValue(imageToBlur, forKey: "inputImage")
-    blurfilter?.setValue(1, forKey: "inputRadius")
-    var resultImage = blurfilter?.value(forKey: "outputImage") as! CIImage
-    var blurredImage = UIImage(ciImage: resultImage)
-    self.img2.image = blurredImage
-    
-  }
-
 }
 extension UIImage {
   
@@ -231,11 +239,6 @@ extension UIImage {
   }
   
   func binarise() -> UIImage {
-    /*contrastFilter.setValue(NSNumber(float: sender.value), forKey: "inputContrast")
-     outputImage = contrastFilter.outputImage;
-     var cgimg = context.createCGImage(outputImage, fromRect: outputImage.extent())
-     newUIImage = UIImage(CGImage: cgimg)!
-     imageView.image = newUIImage;*/
     let glContext = EAGLContext(api: .openGLES2)!
     let ciContext = CIContext(eaglContext: glContext, options: [kCIContextOutputColorSpace : NSNull()])
     let filter = CIFilter(name: "CIPhotoEffectMono")
@@ -245,20 +248,6 @@ extension UIImage {
     
     return UIImage(cgImage: cgimg!)
   }
-  
-//  func sliderContrastValueChanged(sender: Float) -> UIImage
-//  {
-//    var context = CIContext()
-//    var outputImage = CIImage()
-//    var newUIImage = UIImage()
-//    var contrastFilter: CIFilter?
-//    contrastFilter?.setValue(sender, forKey: "inputContrast")
-////    contrastFilter.setValue(NSNumber(value: sender), forKey: "inputContrast")
-//    outputImage = (contrastFilter?.outputImage!)!
-//    var cgimg = context.createCGImage(outputImage, from: outputImage.extent)
-//    newUIImage = UIImage(cgImage: cgimg!)
-//    return(newUIImage)
-//  }
   
   func scaleImage() -> UIImage {
     
@@ -341,74 +330,38 @@ extension UIImage {
     // And now we just create a new UIImage from the drawing context and return it
     return UIImage(cgImage: ctx.makeImage()!)
   }
-//  func fixImageOrientation() -> UIImage? {
-//    var flip:Bool = false //used to see if the image is mirrored
-//    var isRotatedBy90:Bool = false // used to check whether aspect ratio is to be changed or not
-//    
-//    var transform = CGAffineTransform.identity
-//    
-//    //check current orientation of original image
-//    switch self.imageOrientation {
-//    case .down, .downMirrored:
-//      transform = transform.rotated(by: CGFloat(M_PI));
-//      
-//    case .left, .leftMirrored:
-//      transform = transform.rotated(by: CGFloat(M_PI_2));
-//      isRotatedBy90 = true
-//    case .right, .rightMirrored:
-//      transform = transform.rotated(by: CGFloat(-M_PI_2));
-//      isRotatedBy90 = true
-//    case .up, .upMirrored:
-//      break
-//    }
-//    
-//    switch self.imageOrientation {
-//      
-//    case .upMirrored, .downMirrored:
-//      transform = transform.translatedBy(x: self.size.width, y: 0)
-//      flip = true
-//      
-//    case .leftMirrored, .rightMirrored:
-//      transform = transform.translatedBy(x: self.size.height, y: 0)
-//      flip = true
-//    default:
-//      break;
-//    }
-//    
-//    // calculate the size of the rotated view's containing box for our drawing space
-//    let rotatedViewBox = UIView(frame: CGRect(origin: CGPoint(x:0, y:0), size: size))
-//    rotatedViewBox.transform = transform
-//    let rotatedSize = rotatedViewBox.frame.size
-//    
-//    // Create the bitmap context
-//    UIGraphicsBeginImageContext(rotatedSize)
-//    let bitmap = UIGraphicsGetCurrentContext()
-//    
-//    // Move the origin to the middle of the image so we will rotate and scale around the center.
-//    bitmap!.translateBy(x: rotatedSize.width / 2.0, y: rotatedSize.height / 2.0);
-//    
-//    // Now, draw the rotated/scaled image into the context
-//    var yFlip: CGFloat
-//    
-//    if(flip){
-//      yFlip = CGFloat(-1.0)
-//    } else {
-//      yFlip = CGFloat(1.0)
-//    }
-//    
-//    bitmap!.scaleBy(x: yFlip, y: -1.0)
-//    
-//    //check if we have to fix the aspect ratio
-//    if isRotatedBy90 {
-//      bitmap?.draw(self.cgImage!, in: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.height,height: size.width))
-//    } else {
-//      bitmap?.draw(self.cgImage!, in: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width,height: size.height))
-//    }
-//    
-//    let fixedImage = UIGraphicsGetImageFromCurrentImageContext()
-//    UIGraphicsEndImageContext()
-//    
-//    return fixedImage
-//  }
-  
 }
+/*func detect(inputImage : UIImage) -> UIImage? {
+ guard let personciImage = CIImage(image: inputImage) else {
+ return nil
+ }
+ 
+ let accuracy = [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+ if #available(iOS 9.0, *) {
+ let faceDetector = CIDetector(ofType: CIDetectorTypeText, context: nil, options: accuracy)
+ 
+ let faces = faceDetector?.features(in: personciImage)
+ 
+ for face in faces as! [CITextFeature] {
+ 
+ print("Found bounds are \(face.bounds)")
+ 
+ //        let faceBox = UIView(frame: face.bounds)
+ //
+ //        faceBox.layer.borderWidth = 3
+ //        faceBox.layer.borderColor = UIColor.red.cgColor
+ //        faceBox.backgroundColor = UIColor.clear
+ 
+ return nil
+ //        personPic.addSubview(faceBox)
+ 
+ 
+ }
+ 
+ } else {
+ // Fallback on earlier versions
+ }
+ 
+ return nil
+ }
+*/
